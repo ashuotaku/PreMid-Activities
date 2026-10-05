@@ -3,16 +3,23 @@ import { ActivityType, Assets, getTimestamps, getTimestampsFromMedia, StatusDisp
 //* I think this is a browser bug because the custom element does not have any properties when accessing it directly...
 
 let imageId: string | undefined
+let title: string | undefined
+let subtitle: string | undefined
+let playheadPositionMs: number | undefined
+let programDurationMs: number | undefined
 window.addEventListener('message', (e) => {
-  if (e.data.type === 'pmd-receive-image-id')
-    ({ imageId } = e.data as { imageId?: string })
+  if (e.data.type === 'pmd-receive-data')
+    ({ imageId, title, subtitle, playheadPositionMs, programDurationMs } = e.data as { imageId?: string, title?: string, subtitle?: string, playheadPositionMs?: number, programDurationMs?: number })
 })
 
 const script = document.createElement('script')
 script.textContent = `
 setInterval(() => {
-const images = document.querySelector("disney-web-player")?.mediaPlayer?.mediaPlaybackCriteria?.metadata?.images_experience?.standard?.tile;
+const mediaPlayer = document.querySelector("disney-web-player")?.mediaPlayer;
+const metadata = mediaPlayer?.mediaPlaybackCriteria?.metadata;
+const images = metadata?.images_experience?.standard?.tile;
 if (!images) return;
+const timelineInfo = mediaPlayer?.timeline?.info;
 const ratios = Object.keys(images);
 const goal = 100;
 
@@ -20,7 +27,7 @@ const closest = ratios.reduce(function(prev, curr) {
 return (Math.abs((100 / curr) - goal) < Math.abs((100 / prev) - goal) ? curr : prev);
 });
 
-window.postMessage({ type: "pmd-receive-image-id", imageId: images?.[closest]?.imageId }, "*");
+window.postMessage({ type: "pmd-receive-data", imageId: images?.[closest]?.imageId, title: metadata?.title?.text, subtitle: metadata?.subtitle?.text, playheadPositionMs: timelineInfo?.playheadPositionMs, programDurationMs: timelineInfo?.programDurationMs }, "*");
 }, 1000);
 `
 document.head.appendChild(script)
@@ -76,13 +83,9 @@ presence.on('UpdateData', async () => {
             if (presenceData.startTimestamp)
               delete presenceData.startTimestamp
 
-            presenceData.details = document.querySelector(
-              '.title-field.body-copy',
-            )?.textContent
+            presenceData.details = title
 
-            presenceData.state = document
-              .querySelector('.subtitle-field')
-              ?.textContent
+            presenceData.state = subtitle
               ?.replace(/S\d+:E\d+ /, '')
 
             usePresenceName
@@ -92,22 +95,18 @@ presence.on('UpdateData', async () => {
             const { paused } = video
 
             if (!paused) {
-              const sliderEl = document.querySelector('progress-bar')?.shadowRoot?.querySelector('.progress-bar__thumb')
-              const timestamps = getTimestamps(
-                Number.parseInt(sliderEl?.getAttribute('aria-valuenow') ?? '0'),
-                Number.parseInt(sliderEl?.getAttribute('aria-valuemax') ?? '0'),
-              )
-              presenceData.startTimestamp = timestamps[0]
-              presenceData.endTimestamp = timestamps[1]
+              if (playheadPositionMs && programDurationMs) {
+                const timestamps = getTimestamps(playheadPositionMs / 1000, programDurationMs / 1000)
+                presenceData.startTimestamp = timestamps[0]
+                presenceData.endTimestamp = timestamps[1]
+              }
             }
             else {
               presenceData.smallImageKey = Assets.Pause
               presenceData.smallImageText = strings.pause
             }
 
-            const parts = document
-              .querySelector('.subtitle-field')
-              ?.textContent
+            const parts = subtitle
               ?.match(/S(\d+):E(\d+) /)
             if (parts && parts.length > 2)
               presenceData.largeImageText = `Season ${parts[1]}, Episode ${parts[2]}`
@@ -181,7 +180,6 @@ presence.on('UpdateData', async () => {
           presenceData.details = privacy
             ? strings.browsing
             : 'Browsing their watchlist'
-
           break
         }
         case pathname.includes('series'): {
@@ -302,5 +300,5 @@ presence.on('UpdateData', async () => {
 
   if (presenceData.details)
     presence.setActivity(presenceData)
-  else presence.setActivity()
+  else presence.clearActivity()
 })

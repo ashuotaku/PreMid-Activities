@@ -1,6 +1,7 @@
 import type { ActivityMetadataAndFolder } from '../util/getActivities.js'
 import { readFile, rm, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import * as core from '@actions/core'
 import chalk from 'chalk'
@@ -51,7 +52,6 @@ export async function checkDns(
     fix?: boolean
   } = {},
 ) {
-
   let activities: ActivityMetadataAndFolder[] = []
 
   if (all) {
@@ -87,8 +87,13 @@ export async function checkDns(
       if (isCI) {
         const date = new Date().toISOString().split('T')[0]
         const body = generatePRBody(changes, date)
-        await writeFile('dns-check-summary.md', body)
+        const summaryPath = join(tmpdir(), 'dns-check-summary.md')
+        await writeFile(summaryPath, body)
         core.setOutput('has_changes', 'true')
+        core.setOutput('summary_path', summaryPath)
+        core.setOutput('has_deletions', changes.removed.length > 0 ? 'true' : 'false')
+        core.setOutput('has_updates', changes.updated.length > 0 ? 'true' : 'false')
+        core.setOutput('has_multiple_activities', (changes.removed.length + changes.updated.length >= 2) ? 'true' : 'false')
       }
 
       success(

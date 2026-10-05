@@ -51,10 +51,11 @@ presence.on('UpdateData', async () => {
     },
   }
   const { pathname, search, href, hostname } = document.location
-  const [cover, timestamp, privacy] = await Promise.all([
+  const [cover, timestamp, privacy, privategist] = await Promise.all([
     presence.getSetting<boolean>('cover'),
     presence.getSetting<boolean>('timestamp'),
     presence.getSetting<boolean>('privacy'),
+    presence.getSetting<boolean>('privategist'),
   ])
 
   for (const [path, data] of Object.entries(pages)) {
@@ -126,13 +127,13 @@ presence.on('UpdateData', async () => {
             break
           }
           const pathFolder = document
-            .querySelector('#repos-header-breadcrumb-wide > ol')
+            .querySelector('#repos-header-breadcrumb > ol')
             ?.textContent
             ?.trim()
             .split('/')
             .slice(1)
             .join('/')
-          const fileName = document.querySelector('#file-name-id-wide')?.textContent
+          const fileName = document.querySelector('#file-name-id')?.textContent
           presenceData.details = `Browsing repository ${repository.owner}/${repository.name}`
           presenceData.state = `Viewing file ${(pathFolder
             ? `${pathFolder}/${fileName}`
@@ -160,12 +161,12 @@ presence.on('UpdateData', async () => {
               presenceData.details = `Looking at issue #${repository.id}`
               presenceData.state = `${
                 document
-                  .querySelector<HTMLAnchorElement>('a.author')
+                  .querySelector<HTMLAnchorElement>('[data-testid="issue-body-header-author"]')
                   ?.textContent
                   ?.trim()
                   ?? document.querySelector('[href="#top"]')?.textContent?.trim()
               } - ${
-                document.querySelector<HTMLHeadingElement>('h1.gh-header-title')
+                document.querySelector('bdi[data-testid="issue-title"]')
                   ?.textContent
               }`
               presenceData.buttons = [{ label: 'View Issue', url: href }]
@@ -205,8 +206,7 @@ presence.on('UpdateData', async () => {
               ?.textContent
               ?? document.querySelector('[class*="author Link"]')?.textContent
           } - ${
-            document.querySelector<HTMLHeadingElement>('h1.gh-header-title')
-              ?.textContent
+            document.querySelector('[href="#top"]')?.textContent?.trim()
           }`
           presenceData.buttons = [{ label: 'View Pull Request', url: href }]
         }
@@ -366,8 +366,9 @@ presence.on('UpdateData', async () => {
           owner: pathname.split('/')[1],
           name: document.querySelector('[itemprop = \'name\'] > a')?.innerHTML,
         }
-        presenceData.buttons = [{ label: 'View Gist', url: href }]
-        presenceData.details = `Browsing gist ${gist.name} by ${gist.owner}`
+        const isPrivateGist = !!document.querySelector('.Label')
+        presenceData.buttons = isPrivateGist && !privategist ? undefined : [{ label: 'View Gist', url: href }]
+        presenceData.details = isPrivateGist && !privategist ? 'Viewing a private gist' : `Browsing gist ${gist.name} by ${gist.owner}`
     }
   }
   if (timestamp)
